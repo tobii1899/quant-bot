@@ -13,6 +13,9 @@ DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1537949378126286879/k1Rs
 
 ACCOUNT_SIZE = 6000.0  # Kontostand in USD
 RISK_PCT = 0.01        # 1% Risiko pro Trade ($60.00)
+
+# ⚠️ HIER: Auf True lassen für genau EINEN Test-Run. Danach auf False stellen!
+ONE_TIME_TEST_RUN = True
 # ==============================================================================
 
 
@@ -22,14 +25,17 @@ class Params:
             setattr(self, k, v)
 
 
-def send_discord_embed(latest_price, sl_price, tp_price, sl_distance, tp_distance, prob, shares, position_value, expected_profit, max_risk_dollars):
+def send_discord_embed(latest_price, sl_price, tp_price, sl_distance, tp_distance, prob, shares, position_value, expected_profit, max_risk_dollars, is_test=False):
     """Verschickt eine hochauflösende Rich-Embed-Nachricht direkt an den Discord-Kanal."""
     timestamp_str = datetime.now().strftime("%d.%m.%Y %H:%M")
 
+    title = "🧪 AAPL TEST-SIGNAL (Einmaliger Funktionstest)" if is_test else "🚀 AAPL LONG SIGNAL GENERIERT"
+    color = 3447003 if is_test else 3066993  # Blau für Test, Grün für echtes Signal
+
     embed = {
-        "title": "🚀 AAPL LONG SIGNAL GENERIERT",
+        "title": title,
         "description": f"**Strategie Trial #3055** — *{timestamp_str} CEST*",
-        "color": 3066993,  # Grüner Farbcode (Hex #2ECC71)
+        "color": color,
         "fields": [
             {
                 "name": "📈 Trade Details",
@@ -103,8 +109,8 @@ def main():
 
     print(f"🔍 [{datetime.now().strftime('%H:%M:%S')}] AAPL: ${latest_price:.2f} | Prob: {prob:.4f} (Threshold: {params.signal_threshold:.4f})")
 
-    # 4. Signal-Prüfung
-    if prob >= params.signal_threshold:
+    # 4. Auslösen bei echtem Signal ODER beim einmaligen Test-Run
+    if (prob >= params.signal_threshold) or ONE_TIME_TEST_RUN:
         sl_distance = params.sl_atr_mult * atr
         tp_distance = params.tp_atr_mult * atr
 
@@ -116,9 +122,12 @@ def main():
         position_value = shares * latest_price
         expected_profit = shares * tp_distance
 
+        is_test = ONE_TIME_TEST_RUN and (prob < params.signal_threshold)
+
         send_discord_embed(
             latest_price, sl_price, tp_price, sl_distance, tp_distance,
-            prob, shares, position_value, expected_profit, max_risk_dollars
+            prob, shares, position_value, expected_profit, max_risk_dollars,
+            is_test=is_test
         )
 
 
