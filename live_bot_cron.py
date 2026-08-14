@@ -15,7 +15,7 @@ ACCOUNT_SIZE = 6000.0  # Kontostand in USD
 RISK_PCT = 0.01        # 1% Risiko pro Trade ($60.00)
 
 # ⚠️ HIER: Auf True lassen für genau EINEN Test-Run. Danach auf False stellen!
-ONE_TIME_TEST_RUN = True
+ONE_TIME_TEST_RUN = False
 # ==============================================================================
 
 
