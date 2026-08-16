@@ -2,11 +2,8 @@ name: AAPL Live Trading Bot
 
 on:
   schedule:
-    # Cron-Syntax (UTC Zeit! US Handelszeit 15:30-22:00 CEST = 13:30-20:00 UTC)
-    # Ausführung alle 15 Minuten, Montag bis Freitag (1-5) zwischen 13:00 und 20:00 UTC
     - cron: '*/15 13-20 * * 1-5'
   
-  # Erlaubt es, den Bot jederzeit manuell auf GitHub im Browser zu starten
   workflow_dispatch:
 
 jobs:
@@ -26,7 +23,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pandas numpy xgboost yfinance joblib ta
+          pip install scikit-learn requests python-dotenv alpaca-py
 
       - name: Signal prüfen
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
         run: |
           python live_bot_cron.py
