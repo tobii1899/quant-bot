@@ -1,36 +1,90 @@
-import os
 from datetime import datetime
+import os
+from zoneinfo import ZoneInfo
+from alpaca.trading.client import TradingClient
+from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
+from alpaca.trading.requests import (
+    MarketOrderRequest,
+    StopLossRequest,
+    TakeProfitRequest,
+)
 import joblib
 import pandas as pd
 import requests
 import yfinance as yf
 from features import build_feature_matrix
+from dotenv import load_dotenv
 
-# ==============================================================================
-# DISCORD CONFIGURATION
-# ==============================================================================
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1537949378126286879/k1RsdmZjARU3ZlGcdGe_WwgdOMkCXHV7dd1Nz_v3j1qyZ2VetKshjzC516dSUeBVa1vi"
+# lädt die Variablen aus der .env-Datei in die Umgebungsvariablen
+load_dotenv()
+
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
+ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 
 ACCOUNT_SIZE = 6000.0  # Kontostand in USD
-RISK_PCT = 0.01        # 1% Risiko pro Trade ($60.00)
+RISK_PCT = 0.01  # 1% Risiko pro Trade ($60.00)
 
 # ⚠️ HIER: Auf True lassen für genau EINEN Test-Run. Danach auf False stellen!
-ONE_TIME_TEST_RUN = False
+ONE_TIME_TEST_RUN = True
+
+
+# paper=True aktiviert automatisch den Paper-Trading Modus
+alpaca_client = TradingClient(
+    ALPACA_API_KEY, ALPACA_SECRET_KEY, paper=True
+)
 # ==============================================================================
 
-
 class Params:
+
     def __init__(self, d):
         for k, v in d.items():
             setattr(self, k, v)
 
 
-def send_discord_embed(latest_price, sl_price, tp_price, sl_distance, tp_distance, prob, shares, position_value, expected_profit, max_risk_dollars, is_test=False):
-    """Verschickt eine hochauflösende Rich-Embed-Nachricht direkt an den Discord-Kanal."""
-    timestamp_str = datetime.now().strftime("%d.%m.%Y %H:%M")
+def execute_paper_trade(symbol, shares, sl_price, tp_price):
+    """Sendet eine automatisierte Bracket-Order (Market Entry + SL + TP) via alpaca-py."""
+    try:
+        req = MarketOrderRequest(
+            symbol=symbol,
+            qty=shares,
+            side=OrderSide.BUY,
+            time_in_force=TimeInForce.GTC,
+            order_class=OrderClass.BRACKET,
+            stop_loss=StopLossRequest(stop_price=round(sl_price, 2)),
+            take_profit=TakeProfitRequest(limit_price=round(tp_price, 2)),
+        )
+        order = alpaca_client.submit_order(order_data=req)
+        print(f"Alpaca Paper Trade platziert! Order ID: {order.id}")
+        return True
+    except Exception as e:
+        print(f"Fehler bei der Alpaca Order-Ausführung: {e}")
+        return False
 
-    title = "🧪 AAPL TEST-SIGNAL (Einmaliger Funktionstest)" if is_test else "🚀 AAPL LONG SIGNAL GENERIERT"
-    color = 3447003 if is_test else 3066993  # Blau für Test, Grün für echtes Signal
+
+def send_discord_embed(
+    latest_price,
+    sl_price,
+    tp_price,
+    sl_distance,
+    tp_distance,
+    prob,
+    shares,
+    position_value,
+    expected_profit,
+    max_risk_dollars,
+    is_test=False,
+):
+    """Verschickt eine hochauflösende Rich-Embed-Nachricht direkt an den Discord-Kanal."""
+    local_now = datetime.now(ZoneInfo("Europe/Vienna"))
+    timestamp_str = local_now.strftime("%d.%m.%Y %H:%M")
+
+    title = (
+        "🧪 AAPL TEST-SIGNAL (Einmaliger Funktionstest)"
+        if is_test
+        else "🚀 AAPL LONG SIGNAL GENERIERT"
+    )
+    color = 3447003 if is_test else 3066993 
 
     embed = {
         "title": title,
@@ -46,7 +100,7 @@ def send_discord_embed(latest_price, sl_price, tp_price, sl_distance, tp_distanc
                     f"• **Take Profit:** `${tp_price:.2f}` (+${tp_distance:.2f})\n"
                     f"• **Modell-Konfidenz:** `{prob*100:.1f}%`"
                 ),
-                "inline": False
+                "inline": False,
             },
             {
                 "name": "💰 Risikomanagement & Sizing",
@@ -56,32 +110,36 @@ def send_discord_embed(latest_price, sl_price, tp_price, sl_distance, tp_distanc
                     f"• **Max. Risiko (1%):** `${max_risk_dollars:.2f}`\n"
                     f"• **Möglicher Gewinn:** `+${expected_profit:.2f}`"
                 ),
-                "inline": False
-            }
+                "inline": False,
+            },
         ],
-        "footer": {
-            "text": "Quant Trading Bot • Automated Execution System"
-        }
+        "footer": {"text": "Quant Trading Bot • Automated Execution System"},
     }
 
     payload = {
         "username": "AAPL Trading Bot",
         "avatar_url": "https://cdn-icons-png.flaticon.com/512/25/25231.png",
-        "embeds": [embed]
+        "embeds": [embed],
     }
 
     try:
-        response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
+        response = requests.post(
+            DISCORD_WEBHOOK_URL, json=payload, timeout=10
+        )
         if response.status_code in [200, 204]:
             print("📲 Discord-Benachrichtigung erfolgreich gesendet!")
         else:
-            print(f"⚠️ Discord Fehler: {response.status_code} - {response.text}")
+            print(
+                f"⚠️ Discord Fehler: {response.status_code} - {response.text}"
+            )
     except Exception as e:
         print(f"❌ Fehler beim Senden an Discord: {e}")
 
 
 def main():
-    if not os.path.exists("aapl_3055_model.pkl") or not os.path.exists("aapl_3055_config.pkl"):
+    if not os.path.exists("aapl_3055_model.pkl") or not os.path.exists(
+        "aapl_3055_config.pkl"
+    ):
         print("❌ 'aapl_3055_model.pkl' oder 'aapl_3055_config.pkl' fehlt!")
         return
 
@@ -89,27 +147,34 @@ def main():
     config = joblib.load("aapl_3055_config.pkl")
     params = Params(config["params"])
 
-    # 1. Neueste 15m Daten laden
-    df_raw = yf.download("AAPL", period="5d", interval="15m", progress=False, auto_adjust=False)
+    df_raw = yf.download(
+        "AAPL", period="5d", interval="15m", progress=False, auto_adjust=False
+    )
     if isinstance(df_raw.columns, pd.MultiIndex):
         df_raw.columns = df_raw.columns.get_level_values(0)
-    df_raw = df_raw.rename(columns={
-        "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"
-    })
+    df_raw = df_raw.rename(
+        columns={
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume",
+        }
+    )
 
-    # 2. Features berechnen
     df = build_feature_matrix(df_raw, params)
     latest_row = df.iloc[-1:]
     latest_price = latest_row["close"].values[0]
     atr = latest_row["atr"].values[0]
 
-    # 3. Modell-Wahrscheinlichkeit auswerten
     X = latest_row[config["feature_cols"]]
     prob = model.predict_proba(X)[0, 1]
 
-    print(f"🔍 [{datetime.now().strftime('%H:%M:%S')}] AAPL: ${latest_price:.2f} | Prob: {prob:.4f} (Threshold: {params.signal_threshold:.4f})")
+    print(
+        f"🔍 [{datetime.now().strftime('%H:%M:%S')}] AAPL: ${latest_price:.2f}"
+        f" | Prob: {prob:.4f} (Threshold: {params.signal_threshold:.4f})"
+    )
 
-    # 4. Auslösen bei echtem Signal ODER beim einmaligen Test-Run
     if (prob >= params.signal_threshold) or ONE_TIME_TEST_RUN:
         sl_distance = params.sl_atr_mult * atr
         tp_distance = params.tp_atr_mult * atr
@@ -125,10 +190,21 @@ def main():
         is_test = ONE_TIME_TEST_RUN and (prob < params.signal_threshold)
 
         send_discord_embed(
-            latest_price, sl_price, tp_price, sl_distance, tp_distance,
-            prob, shares, position_value, expected_profit, max_risk_dollars,
-            is_test=is_test
+            latest_price,
+            sl_price,
+            tp_price,
+            sl_distance,
+            tp_distance,
+            prob,
+            shares,
+            position_value,
+            expected_profit,
+            max_risk_dollars,
+            is_test=is_test,
         )
+
+        if ((prob >= params.signal_threshold) or ONE_TIME_TEST_RUN) and shares > 0:
+            execute_paper_trade("AAPL", shares, sl_price, tp_price)
 
 
 if __name__ == "__main__":
