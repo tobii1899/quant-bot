@@ -2,6 +2,7 @@ import optuna
 
                                               
 STORAGE_URL = "sqlite:///strategies/optuna_study.db"
+TARGET_STUDY_NAME = "quant_strategy_smc_fine_tune_v1"
 
 try:
                                                       
@@ -16,7 +17,8 @@ try:
         
                                                      
         target_study_name = summaries[0].study_name
-        study = optuna.load_study(study_name=target_target_study_name if 'target_target_study_name' in locals() else target_study_name, storage=STORAGE_URL)
+        # study = optuna.load_study(study_name=target_target_study_name if 'target_target_study_name' in locals() else target_study_name, storage=STORAGE_URL)
+        study = optuna.load_study(study_name=TARGET_STUDY_NAME, storage=STORAGE_URL)
         best_trial = study.best_trial
 
         print("\n" + "=" * 60)

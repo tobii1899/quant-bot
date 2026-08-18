@@ -235,6 +235,10 @@ def run_backtest(df: pd.DataFrame, signals: pd.Series, confidences: pd.Series,
 
     result = BacktestResult(trades=trades, equity_curve=equity_curve, benchmark_curve=benchmark_curve)
     _compute_metrics(result)
+
+    trades_df = pd.DataFrame([vars(t) for t in result.trades])
+    trades_df.to_csv("backtest_trades.csv", index=False)
+    print("Trades erfolgreich in 'backtest_trades.csv' gespeichert!")
     return result
 
 
@@ -275,3 +279,74 @@ def _compute_metrics(result: BacktestResult) -> None:
     running_max = result.equity_curve.cummax()
     drawdown = (result.equity_curve - running_max) / running_max
     result.max_drawdown_pct = abs(drawdown.min())
+
+if __name__ == "__main__":
+    import os
+    import joblib
+    import pandas as pd
+    import yfinance as yf
+    from features import build_feature_matrix
+
+    class Params:
+        def __init__(self, d):
+            for k, v in d.items():
+                setattr(self, k, v)
+
+    model_file = "aapl_3055_model.pkl"
+    config_file = "aapl_3055_config.pkl"
+
+    if not (os.path.exists(model_file) and os.path.exists(config_file)):
+        print("❌ 'aapl_3055_model.pkl' oder 'aapl_3055_config.pkl' fehlt im Ordner!")
+    else:
+        print("============================================================")
+        print(" Lade Modell-Dateien für Trial #3055 (XGBoost)...")
+        print("============================================================")
+        
+        model = joblib.load(model_file)
+        config = joblib.load(config_file)
+        
+        params = Params(config["params"])
+        feature_cols = config["feature_cols"]
+
+        # 15m Kerzen für die letzten 60 Tage laden
+        df_raw = yf.download("AAPL", period="60d", interval="15m", progress=False, auto_adjust=False)
+        if isinstance(df_raw.columns, pd.MultiIndex):
+            df_raw.columns = df_raw.columns.get_level_values(0)
+        df_raw = df_raw.rename(
+            columns={
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume",
+            }
+        )
+
+        df = build_feature_matrix(df_raw, params)
+        X = df[feature_cols]
+        
+        # XGBoost verarbeitet X direkt ohne Scaler
+        probs = model.predict_proba(X)[:, 1]
+
+        signals = pd.Series(0, index=df.index)
+        signals[probs >= params.signal_threshold] = 1
+        confidences = pd.Series(probs, index=df.index)
+
+        res = run_backtest(
+            df=df,
+            signals=signals,
+            confidences=confidences,
+            sl_atr_mult=params.sl_atr_mult,
+            tp_atr_mult=params.tp_atr_mult,
+        )
+
+        print("\n==================================================")
+        print(" BACKTEST ERGEBNISSE TRIAL #3055 (LETZTE 60 TAGE):")
+        print("==================================================")
+        print(f"  • Ausgeführte Trades: {res.n_trades}")
+        print(f"  • Winrate:            {res.winrate * 100:.1f}%")
+        print(f"  • Ø CRV:              {res.avg_crv:.2f}")
+        print(f"  • Total Return:       +{res.total_return_pct * 100:.2f}%")
+        print(f"  • Max Drawdown:       {res.max_drawdown_pct * 100:.2f}%")
+        print(f"  • Profit Factor:      {res.profit_factor:.2f}")
+        print("==================================================\n")

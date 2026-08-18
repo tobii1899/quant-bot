@@ -4,4 +4,5 @@ __pycache__/
 .idea/
 .env
 *.env
-keys.env
+keys.env*.db 
+*.db 

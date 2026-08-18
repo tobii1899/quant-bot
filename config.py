@@ -55,13 +55,14 @@ class StrategyCriteria:
     min_crv: float = 1.3                                  
     min_total_return_pct: float = 0.0
     max_drawdown_pct: float = 0.07
-    min_trades: int = 30                                                                
+    # min_trades: int = 30                                                                
+    min_trades: int = 15                                                                
     min_profit_factor: float = 1.3
 
 
                                                                             
                                         
-                                                                            
+"""                                                                      
 @dataclass
 class SearchSpace:
                                                             
@@ -83,7 +84,39 @@ class SearchSpace:
 
                        
     model_types: tuple = ("xgboost", "random_forest", "logistic")
+"""  
+@dataclass
+class SearchSpace:
+    rsi_period: tuple = (7, 30)
+    ema_fast: tuple = (5, 20)
+    ema_slow: tuple = (21, 100)
+    atr_period: tuple = (7, 30)
+    bb_period: tuple = (10, 40)
 
+    # sl_atr_mult: tuple = (0.8, 2.5)
+    # tp_atr_mult: tuple = (1.2, 4.0)
+
+    sl_atr_mult: tuple = (0.9, 1.8)
+    tp_atr_mult: tuple = (1.8, 3.2)
+
+    signal_threshold: tuple = (0.65, 0.82)
+
+    # 🚀 Hier wurden alle 6 neuen SMC/ICT Feature-Gruppen hinzugefügt:
+    feature_flags: tuple = (
+        "trend",
+        "momentum",
+        "volatility",
+        "volume",
+        "price_action",
+        "smc_fvg",
+        "smc_order_blocks",
+        "smc_market_structure",
+        "smc_liquidity",
+        "smc_premium_discount",
+        "smc_killzones",
+    )
+
+    model_types: tuple = ("xgboost", "random_forest", "logistic")
 
                                                                             
                 
@@ -96,7 +129,7 @@ class OptimizerConfig:
     walk_forward_splits: int = 2                                                              
                                                                                                        
     train_test_split_pct: float = 0.7                                   
-    study_name: str = "quant_strategy_search"
+    study_name: str = "quant_strategy_smc_fine_tune_v1"
                                                                                
                                                                               
                                                                                      

@@ -16,7 +16,7 @@ from features import build_feature_matrix
 from dotenv import load_dotenv
 
 # lädt die Variablen aus der .env-Datei in die Umgebungsvariablen
-load_dotenv()
+load_dotenv("keys.env")
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
@@ -26,7 +26,7 @@ ACCOUNT_SIZE = 6000.0  # Kontostand in USD
 RISK_PCT = 0.01  # 1% Risiko pro Trade ($60.00)
 
 # ⚠️ HIER: Auf True lassen für genau EINEN Test-Run. Danach auf False stellen!
-ONE_TIME_TEST_RUN = True
+ONE_TIME_TEST_RUN = False
 
 
 # paper=True aktiviert automatisch den Paper-Trading Modus

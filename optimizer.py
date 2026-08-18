@@ -71,7 +71,7 @@ def _sample_trial_params(trial: optuna.Trial) -> SimpleNamespace:
         if trial.suggest_categorical(f"use_{g}", [True, False])
     ]
     if not active_features:
-        active_features = ["trend"]                          
+        active_features = ["trend"]
 
     return SimpleNamespace(
         rsi_period=trial.suggest_int("rsi_period", *ss.rsi_period),
@@ -81,8 +81,10 @@ def _sample_trial_params(trial: optuna.Trial) -> SimpleNamespace:
         bb_period=trial.suggest_int("bb_period", *ss.bb_period),
         sl_atr_mult=trial.suggest_float("sl_atr_mult", *ss.sl_atr_mult),
         tp_atr_mult=trial.suggest_float("tp_atr_mult", *ss.tp_atr_mult),
-        signal_threshold=trial.suggest_float("signal_threshold", *ss.signal_threshold),
-        model_type=trial.suggest_categorical("model_type", list(ss.model_types)),
+        # Untergrenze für Signal-Threshold auf mindestens 0.60 anheben
+        signal_threshold=trial.suggest_float("signal_threshold", 0.60, 0.82),
+        # Nur XGBoost & Random Forest verwenden
+        model_type=trial.suggest_categorical("model_type", ["xgboost", "random_forest"]),
         active_features=active_features,
     )
 
@@ -96,8 +98,8 @@ def _composite_score(metrics: dict) -> float:
                                                   
                                                                                          
     trade_penalty = 0.0
-    if n_trades < 30:
-        trade_penalty = (30 - n_trades) * 0.30
+    if n_trades < 20:
+        trade_penalty = (20 - n_trades) * 0.50
 
                       
     return_penalty = 0.0
@@ -254,7 +256,13 @@ def run_optimization_cycle(ticker: str | None = None) -> optuna.Study:
         sampler=optuna.samplers.TPESampler(seed=42, multivariate=True, group=True, n_startup_trials=20),
     )
     logger.info("Study enthält bereits %d Trials aus vorherigen Zyklen.", len(study.trials))
-    study.optimize(lambda t: objective(t, df), n_trials=OPTIMIZER.n_trials_per_cycle, show_progress_bar=False)
+    # study.optimize(lambda t: objective(t, df), n_trials=OPTIMIZER.n_trials_per_cycle, show_progress_bar=False)
+    study.optimize(
+        lambda t: objective(t, df), 
+        n_trials=OPTIMIZER.n_trials_per_cycle, 
+        show_progress_bar=False,
+        catch=(ValueError, Exception) 
+    )
     _log_progress_towards_criteria(study)
     _maybe_save_best(study, df)
     return study
